@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "test": "node --test tests/*.test.js",
-    "test:e2e": "node tests/browser.cjs",
+    "test:e2e": "node tests/browser.cjs && node tests/miro-browser.cjs",
     "publish:pages": "bash scripts/publish-pages.sh"
   },
   "dependencies": {
