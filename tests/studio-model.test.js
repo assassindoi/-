@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {assignmentState,appendCalendarEvent,validatePublicConfig,pitchName} from '../src/studio/model.js';
+const assignment={id:'a',payload:{dueAt:'2026-01-01T10:00:00Z',acceptedAt:null}};
+test('先生の提案を、生徒の合意や完了として数えない',()=>{assert.equal(assignmentState(assignment,[],Date.parse('2026-01-02')),'合意待ち');assert.equal(assignmentState({...assignment,payload:{...assignment.payload,acceptedAt:'yes'}},[],Date.parse('2026-01-02')),'未実施・振替待ち')});
+test('最新の提出と先生の確認を分け、再提出後は再び確認待ちになる',()=>{const submission={id:'s',kind:'submission',created_at:'2026-01-01',payload:{assignmentId:'a'}};const review={kind:'review',payload:{submissionId:'s',result:'retry'}};assert.equal(assignmentState(assignment,[submission]),'提出済み');assert.equal(assignmentState(assignment,[submission,review]),'再練習');assert.equal(assignmentState(assignment,[submission,review,{...submission,id:'s2',created_at:'2026-01-02'}]),'提出済み')});
+test('カレンダーはUTC日時と5分前アラームを含み、日本語と改行をエスケープする',()=>{const result=appendCalendarEvent({title:'しま,練習',start:'2026-01-02T19:00:00+09:00',minutes:10,note:'a\nb'});assert.match(result,/DTSTART:20260102T100000Z/);assert.match(result,/DTEND:20260102T101000Z/);assert.match(result,/TRIGGER:-PT5M/);assert.ok(result.includes('SUMMARY:しま\\,練習'));assert.ok(result.includes('DESCRIPTION:a\\nb'))});
+test('共有設定は公開キーのみ受け付け、管理者用キーを拒否する',()=>{assert.equal(validatePublicConfig('https://test.supabase.co','sb_publishable_test'),'');assert.ok(validatePublicConfig('https://test.supabase.co','sb_secret_test'));const secret='a.'+btoa(JSON.stringify({role:'service_role'}))+'.b';assert.ok(validatePublicConfig('https://test.supabase.co',secret));assert.ok(validatePublicConfig('http://example.com','sb_publishable_test'))});
+test('鍵盤はMIDI音高から正しい表記を返す',()=>{assert.equal(pitchName(60),'C4');assert.equal(pitchName(66),'F#4');assert.equal(pitchName(96),'C7')});

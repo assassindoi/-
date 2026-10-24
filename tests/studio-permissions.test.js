@@ -1,0 +1,45 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {PGlite} from '@electric-sql/pglite';
+import {readFile} from 'node:fs/promises';
+test('共有DBの実行検証：役割、別ルーム隔離、生徒による必須メモ改変と偽確認を拒否',async()=>{
+ const db=new PGlite();
+ try{
+ await db.exec(`create role authenticated; create schema auth; create schema storage;
+ create table auth.users(id uuid primary key);
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ grant usage on schema auth,storage to authenticated;grant execute on function auth.uid() to authenticated;
+ create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+ create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);
+ alter table storage.objects enable row level security;
+ create function storage.foldername(name text) returns text[] language sql immutable as $$select (string_to_array(name,'/'))[1:array_length(string_to_array(name,'/'),1)-1]$$;
+ grant select,insert,delete on storage.objects to authenticated;
+ insert into auth.users values('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002'),('00000000-0000-0000-0000-000000000003');`);
+ await db.exec(await readFile(new URL('../supabase/schema.sql',import.meta.url),'utf8'));
+ await db.exec(`set role authenticated;select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);`);
+ const {rows}=await db.query(`select public.tone_create_room('先生としま') as id`);const room=rows[0].id;
+ const code=(await db.query(`select invite_code from public.tone_rooms where id=$1`,[room])).rows[0].invite_code;
+ await db.query(`insert into public.tone_docs(id,room_id,kind,payload) values('assignment',$1,'assignment',$2)`,[room,JSON.stringify({title:'練習',requiredMemo:'先生の指示',acceptedAt:null})]);
+ await assert.rejects(()=>db.query(`update public.tone_docs set payload=payload||'{"acceptedAt":"teacher-forged"}' where id='assignment'`),/Only the student/);
+ await db.exec(`select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);`);
+ assert.equal((await db.query(`select * from public.tone_docs`)).rows.length,0);
+ await db.query(`select public.tone_join_room($1)`,[code]);
+ assert.equal((await db.query(`select * from public.tone_docs`)).rows.length,1);
+ await assert.rejects(()=>db.query(`update public.tone_docs set payload=payload||'{"requiredMemo":"生徒が改変"}' where id='assignment'`),/Only the teacher/);
+ await db.query(`update public.tone_docs set payload=payload||'{"acceptedAt":"2026-01-01"}' where id='assignment'`);
+ const path=room+'/00000000-0000-0000-0000-000000000002/audio';
+ await db.query(`insert into storage.objects(bucket_id,name) values('tone-room-assets',$1)`,[path]);
+ await db.query(`insert into public.tone_docs(id,room_id,kind,payload) values('audio',$1,'asset',$2)`,[room,JSON.stringify({path,type:'audio/wav'})]);
+ await db.query(`insert into public.tone_docs(id,room_id,kind,payload) values('submission',$1,'submission','{"assignmentId":"assignment","assetId":"audio"}')`,[room]);
+ await assert.rejects(()=>db.query(`insert into public.tone_docs(id,room_id,kind,payload) values('fake-review',$1,'review','{"submissionId":"submission"}')`,[room]),/row-level security/);
+ assert.equal((await db.query(`update public.tone_docs set payload='{}' where id='submission' returning *`)).rows.length,0);
+ assert.equal((await db.query(`delete from storage.objects where name=$1 returning *`,[path])).rows.length,0);
+ await db.exec(`select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);`);
+ assert.equal((await db.query(`select * from public.tone_docs`)).rows.length,0);assert.equal((await db.query(`select * from storage.objects`)).rows.length,0);
+ await assert.rejects(()=>db.query(`select public.tone_join_room($1)`,[code]),/already has a student/);
+ await db.exec(`select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);`);
+ await db.query(`insert into public.tone_docs(id,room_id,kind,payload) values('review',$1,'review','{"submissionId":"submission","result":"approved"}')`,[room]);
+ assert.equal((await db.query(`select payload->>'result' as result from public.tone_docs where id='review'`)).rows[0].result,'approved');
+ await db.query(`update public.tone_docs set payload=payload||'{"requiredMemo":"先生が変更"}' where id='assignment'`);assert.equal((await db.query(`select payload->'acceptedAt' as accepted from public.tone_docs where id='assignment'`)).rows[0].accepted,null);
+ }finally{await db.close()}
+});
