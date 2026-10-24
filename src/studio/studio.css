@@ -5,3 +5,5 @@
 .background-push-settings{border-top:1px solid #e4ead8;padding-top:20px;margin-top:25px}.background-push-settings>.text-link{display:flex;margin-top:17px}
 
 .studio-loading{padding:40px;text-align:center;color:#9aa58a}
+
+.material-row{flex-wrap:wrap}.material-editor{flex-basis:100%;width:100%;margin-top:12px;padding:20px;background:#f5f6ee;border:1px solid #dbe3cd;border-radius:7px;scroll-margin-top:20px}.material-editor:focus{outline:none}.material-editor .studio-section-title h3{margin:0}.material-editor .studio-section-title .icon-button{margin-left:auto}@media(max-width:650px){.material-editor{padding:14px}}
