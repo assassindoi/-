@@ -1,0 +1,2 @@
+self.addEventListener('push',event=>{let data;try{data=event.data.json()}catch{return}event.waitUntil(self.registration.showNotification(data.title||'tone.',{body:data.body||'練習室を確認してください。',tag:data.tag||'tone-practice',data:{url:self.registration.scope}}))});
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(windows=>{const window=windows.find(w=>w.url.startsWith(self.registration.scope));return window?window.focus():clients.openWindow(self.registration.scope)}))});
