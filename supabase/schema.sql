@@ -48,7 +48,7 @@ begin
  if tg_op='UPDATE' then
   if new.id<>old.id or new.room_id<>old.room_id or new.kind<>old.kind or new.author_id<>old.author_id then raise exception 'Document identity cannot be changed'; end if;
   if role_name='student' and new.kind='assignment' then
-   if (new.payload - array['acceptedAt','rescheduleTo','rescheduleReason','reminderConsent']) <> (old.payload - array['acceptedAt','rescheduleTo','rescheduleReason','reminderConsent']) then raise exception 'Only the teacher can change the practice requirements'; end if;
+   if (new.payload - array['acceptedAt','reminderConsent']) <> (old.payload - array['acceptedAt','reminderConsent']) then raise exception 'Only the teacher can change the practice requirements'; end if;
   end if;
   new.version:=old.version+1;
   new.created_at:=old.created_at;
@@ -58,7 +58,7 @@ begin
  end if;
  if new.kind='assignment' then
   if role_name='teacher' and coalesce(new.payload->>'acceptedAt','')<>'' and (tg_op='INSERT' or new.payload->'acceptedAt' is distinct from old.payload->'acceptedAt') then raise exception 'Only the student can agree to a practice'; end if;
-  if tg_op='UPDATE' and role_name='teacher' and (new.payload - array['acceptedAt','reminderConsent','rescheduleTo','rescheduleReason','history']) <> (old.payload - array['acceptedAt','reminderConsent','rescheduleTo','rescheduleReason','history']) then
+  if tg_op='UPDATE' and role_name='teacher' and (new.payload - array['acceptedAt','reminderConsent']) <> (old.payload - array['acceptedAt','reminderConsent']) then
    new.payload:=new.payload || '{"acceptedAt":null,"reminderConsent":false}'::jsonb;
   end if;
   if role_name='student' and coalesce(new.payload->>'acceptedAt','')<>'' and new.payload->'acceptedAt' is distinct from old.payload->'acceptedAt' then new.payload:=jsonb_set(new.payload,'{acceptedAt}',to_jsonb(now())); end if;

@@ -4,9 +4,8 @@ export function assignmentState(assignment,docs,now=Date.now()){
  const review=latest&&docs.find(d=>d.kind==='review'&&d.payload.submissionId===latest.id);
  if(review)return review.payload.result==='retry'?'再練習':'確認済み';
  if(latest)return '提出済み';
- if(assignment.payload.rescheduleTo)return '振替の相談中';
  if(!assignment.payload.acceptedAt)return '合意待ち';
- return new Date(assignment.payload.dueAt).getTime()<now?'未実施・振替待ち':'合意済み';
+ return new Date(assignment.payload.dueAt).getTime()<now?'未実施':'合意済み';
 }
 export function latestIssueMemo(docs,targetId){return docs.filter(d=>d.kind==='practice'&&d.payload.targetId===targetId).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0]?.payload.nextMemo||'';}
 export function appendCalendarEvent({title,start,minutes=15,note=''}){
